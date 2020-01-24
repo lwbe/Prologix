@@ -1,0 +1,88 @@
+root@llrgaussbench Prologix]# python2 prologix.py 
+INFO:root:Found device /dev/ttyUSB0 for serial number PXG9ASAT
+INFO:root:Sending Data '++rst\n'
+INFO:root:==>  
+INFO:root:Sending Data '++ver\n'
+INFO:root:==> Prologix GPIB-USB Controller version 6.101
+ 
+INFO:root:Sending Data '++auto\n'
+INFO:root:==> 1
+ 
+INFO:root:Sending Data '++mode\n'
+INFO:root:==> 1
+ 
+INFO:root:Sending Data '++eos\n'
+INFO:root:==> 1
+ 
+INFO:root:Sending Data '++eoi\n'
+INFO:root:==> 1
+ 
+INFO:root:Sending Data '++eot_enable\n'
+INFO:root:==> 1
+ 
+INFO:root:Sending Data '++eot_char\n'
+INFO:root:==> 10
+ 
+INFO:root:Sending Data '++addr\n'
+INFO:root:==> 12
+ 
+INFO:root:Sending Data '++mode 1\n'
+INFO:root:==>  
+INFO:root:Sending Data '++auto 1\n'
+INFO:root:==> -0.1678 
+ 
+INFO:root:Sending Data '++addr 12\n'
+INFO:root:==> 
+ 
+INFO:root:Sending Data '*idn?\r\n\n'
+INFO:root:==>  
+INFO:root:Sending Data 'ALLF?\r\n\n'
+INFO:root:==>  
+INFO:root:Reading Data
+INFO:root:Sending Data '++read\n'
+INFO:root:==>  
+[root@llrgaussbench Prologix]# python2 prologix.py 
+INFO:root:Found device /dev/ttyUSB0 for serial number PXG9ASAT
+INFO:root:Sending Data '++rst\n'
+INFO:root:==>  
+INFO:root:Sending Data '++ver\n'
+INFO:root:==> Prologix GPIB-USB Controller version 6.101
+ 
+INFO:root:Sending Data '++auto\n'
+INFO:root:==> 0
+ 
+INFO:root:Sending Data '++mode\n'
+INFO:root:==> 1
+ 
+INFO:root:Sending Data '++eos\n'
+INFO:root:==> 1
+ 
+INFO:root:Sending Data '++eoi\n'
+INFO:root:==> 1
+ 
+INFO:root:Sending Data '++eot_enable\n'
+INFO:root:==> 0
+ 
+INFO:root:Sending Data '++eot_char\n'
+INFO:root:==> 10
+ 
+INFO:root:Sending Data '++addr\n'
+INFO:root:==> 12
+ 
+INFO:root:Sending Data '++mode 1\n'
+INFO:root:==>  
+INFO:root:Sending Data '++auto 1\n'
+INFO:root:==> 0
+ 
+INFO:root:Sending Data '++addr 12\n'
+INFO:root:==> 0
+ 
+INFO:root:Sending Data '*idn?\r\n\n'
+INFO:root:==> LSCI,MODEL460,0,032406
+ 
+INFO:root:Sending Data 'ALLF?\r\n\n'
+INFO:root:==> -0.1645 ,-05.967 ,-0.0426 ,+05.970 
+ 
+INFO:root:Reading Data
+INFO:root:Sending Data '++read\n'
+INFO:root:==>  
