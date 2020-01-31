@@ -1,16 +1,26 @@
-import os,serial,socket
+#import os,serial,socket
 import logging
 logging.basicConfig(level=logging.DEBUG)
 SERIAL_TIMEOUT=0.5
+
+def to_bytes(a):
+    if type(a) == bytes:
+        return a
+    return a.encode()
 
 class Prologix_Device():
     def __init__(self,
                  type="USB",
                  serial_number=None,
                  baudrate=9600,
-                 timeout=SERIAL_TIMEOUT):        
+                 timeout=SERIAL_TIMEOUT,
+                 gpib_eot="\r\n"):
+
+        self.gpib_eot=to_bytes(gpib_eot)
         
-        if type.lower()=="usb":
+        if type.lower() == "debug":
+            pass
+        elif type.lower()=="usb":
             if serial:
                 port = self.find_dev(serial_number)
                 if port == None:
@@ -40,14 +50,22 @@ class Prologix_Device():
 
     def send(self,msg):
 
+        # first convert to bytes
         if type(msg) == bytes:
             s_msg = msg
         else:
             s_msg=msg.encode()
-        s_msg += b'\n'
+
+        full_command=b""
+        for c in s_msg.split(b";"):
+            if c.startswith(b"++"):
+                full_command += c+b"\n"
+            else:
+                full_command += c+self.gpib_eot
         
-        logging.info("Sending Data %s",repr(str(s_msg)))
-        self.serial_dev.write(s_msg)
+            
+        logging.info("Sending Data %s",repr(str(full_command)))
+        #self.serial_dev.write(s_msg)
         logging.info("==> %s " % repr(self.serial_dev.read(10000)))
         
     def read(self):
@@ -102,12 +120,13 @@ Available commands are:
         ++help                -- display this help
         """
         
-        list_of_available_commands="++addr,++auto,++clr,++eoi,++eos,++eot_enable,++eot_char,++ifc,++loc,++lon,++mode,++read,++read_tmo_ms,++rst,++savecfg,++spoll,++srq,++status,++trg,++ver,++help".split(',')
+        list_of_available_commands=b"++addr,++auto,++clr,++eoi,++eos,++eot_enable,++eot_char,++ifc,++loc,++lon,++mode,++read,++read_tmo_ms,++rst,++savecfg,++spoll,++srq,++status,++trg,++ver,++help".split(b',')
 
-        if cmd.startswith("++"):
-            if (cmd in list_of_available_commands) or cmd.lower()[0]=="q":
+        if cmd.startswith(b"++"):
+            if (cmd in list_of_available_commands):
                 return True
             else:
+                print("%s not found !! "% cmd)
                 print(usage)
                 return False
         return True
