@@ -52,22 +52,27 @@ Prologix commands are:
 """
 
 # helper function that convert string to bytes.
+#-----------------------------------------------------------------------------------------------------------
 def to_bytes(a):
     if type(a) == bytes:
         return a
     return a.encode()
 
 # a class for debuging it only provides write and read function
+#===========================================================================================================
 class dummy_device():
+#-----------------------------------------------------------------------------------------------------------
     def write(self,msg):
         print(msg)
-
+#-----------------------------------------------------------------------------------------------------------
     def read(self,n):
         print("should return something but in debug mode nothing")
 
 
 # the class to talk to the prologix
+#===========================================================================================================
 class Prologix_Device():
+#-----------------------------------------------------------------------------------------------------------
     def __init__(self,
                  dev="usb",
                  serial_number=None,
@@ -82,7 +87,6 @@ class Prologix_Device():
         else:
             raise Exception("debug level %s not understood should be one of" % ( debug_level,
                                                                                  ", ".join(dbg_lvl.keys())))
-        
         
         self.gpib_eot = to_bytes(gpib_eot)
         
@@ -105,12 +109,44 @@ class Prologix_Device():
                 raise Exception("Serial number not given")
         else:
             raise Exception("type %s not implemented yet" % type)
-    
+#-----------------------------------------------------------------------------------------------------------
     def find_dev(self,sn):
+        """
+        return the path in /dev for the serial number sn or None if not found
+        """
+
+        # Note we can get a lot of information with this
+        # 'apply_usb_info',
+        # 'description',
+        # 'device',
+        # 'device_path',
+        # 'hwid',
+        # 'interface',
+        # 'location',
+        # 'manufacturer',
+        # 'name',
+        # 'pid',
+        # 'product',
+        # 'read_line',
+        # 'serial_number',
+        # 'subsystem',
+        # 'usb_description',
+        # 'usb_device_path',
+        # 'usb_info',
+        # 'usb_interface_path',
+        # 'vid']
+
+        from serial.tools import list_ports
+        for p in list_ports.comports():
+            if p.serial_number==sn:
+                return p.device
+        return None
+#-----------------------------------------------------------------------------------------------------------
+    def find_dev_obsolote(self,sn):
         """
         very rough method to get the /dev/ attached to a serial_number
         """
-            
+        
         path = "/dev/serial/by-id"
         for r, d, f in os.walk(path):
             for i in f:
@@ -120,20 +156,22 @@ class Prologix_Device():
                     
                     return os.path.realpath(os.path.join(path,i))
         return None
-
-    def send2(self,msg):
-
-        if type(msg) == bytes:
-            s_msg = msg
-        else:
-            s_msg=msg.encode()
-        s_msg += b'\n'
-        
-        logging.info("Sending Data %s",repr(str(s_msg)))
-        self.device.write(s_msg)
-        logging.info("==> %s " % repr(self.device.read(10000)))
-
-    
+#-----------------------------------------------------------------------------------------------------------
+    def config(self,mode=1,auto=0,eoi=1,eos=1,eot_enable=0,eot_char=10):
+        # see https://github.com/rambo/python-scpi/blob/master/scpi/transports/gpib/prologix.py for some values
+        self.send("++mode %d" % mode)
+        self.send("++auto %d" % auto)
+        self.send("++eoi %d" % eoi)
+        self.send("++eos %d" % eos)
+        self.send("++eot_enable %d" % eot_enable)
+        self.send("++eot_char %d" % eot_char)
+#-----------------------------------------------------------------------------------------------------------
+    def scan_gpib_addresses(self):
+        for a in range(31):
+            r = self.query("++spoll %d" % a).decode()
+            if r:
+                print("found something at gpib_address %d" % a)            
+#-----------------------------------------------------------------------------------------------------------
     def send(self,msg):
         """
         send the message to the prologix
@@ -152,24 +190,42 @@ class Prologix_Device():
 
         logging.info("Sending Data %s",repr(full_command))
         self.device.write(full_command)
-        
-        
+#-----------------------------------------------------------------------------------------------------------
     def read(self):
         logging.info("Reading Data")
         self.send(b"++read")
         return self.device.read(1000)
-    
-        
+#-----------------------------------------------------------------------------------------------------------
     def query(self,msg):
         self.send(msg)
         logging.info("Reading Raw Data")
         ret_val = self.device.read(1000)
         logging.info("==> %s " % repr(ret_val))
         return ret_val
-    
+#-----------------------------------------------------------------------------------------------------------
     def check_command(self,cmd):
 
-        list_of_available_commands=b"++addr,++auto,++clr,++eoi,++eos,++eot_enable,++eot_char,++ifc,++loc,++lon,++mode,++read,++read_tmo_ms,++rst,++savecfg,++spoll,++srq,++status,++trg,++ver,++help".split(b',')
+        list_of_available_commands=[ b"++addr",
+                                     b"++auto",
+                                     b"++clr",
+                                     b"++eoi",
+                                     b"++eos",
+                                     b"++eot_enable",
+                                     b"++eot_char",
+                                     b"++ifc",
+                                     b"++loc",
+                                     b"++lon",
+                                     b"++mode",
+                                     b"++read",
+                                     b"++read_tmo_ms",
+                                     b"++rst",
+                                     b"++savecfg",
+                                     b"++spoll",
+                                     b"++srq",
+                                     b"++status",
+                                     b"++trg",
+                                     b"++ver",
+                                     b"++help"]
 
         # we try to see if you have a prology command or not. It starts by ++ and should be one of the list above
         if cmd.startswith(b"++"):
@@ -185,8 +241,9 @@ class Prologix_Device():
                 print(help_usage)
                 return False
         return True
+#===========================================================================================================
 
-    
+
 if __name__=="__main__":
 
 
@@ -205,10 +262,6 @@ if __name__=="__main__":
     debug_choices=["critical","error","warning","info","debug"]
     parser.add_argument("-d","--debug_level", help="set debug level",choices=debug_choices,default="critical")
 
-    
-
-    
-    
     #parser.add_argument("--gpib_eot",help="",default= "\r\n")
     
     args = parser.parse_args()
@@ -232,6 +285,11 @@ if __name__=="__main__":
         print("type %s not implemented yet" % args.device)
         sys.exit(0)
 
+    p.config()
+    print("Scanning gpib adresses ..")
+    p.scan_gpib_addresses()
+    print("... Done")
+                   
     interact_usage="""
 You can now send, query and read command from the prologix\n\tNote that each command should be preceded by a letter indicating the  type of command
     (q) for query
@@ -244,9 +302,8 @@ examples:
     r
 
 to Quit the program type Q
-
-
 """
+    
     print(interact_usage)
     # the loop that will interact with the device
     is_running = True
@@ -273,31 +330,12 @@ to Quit the program type Q
     #try_good=False
     comment="""if try_good:
         pass
-        p.send("++mode 0")
-        p.send("++addr 0")
-        p.send("++mode 1")
-        p.send("++mode")
-        p.send("++mode 1")
-        p.send("++auto 0")
-        p.send("++eoi  1")
-        p.send("++eos  1")
-        p.send("++eot_enable 0")
-        p.send("++eot_char 10")
         p.send("++addr 12")
         p.send("ALLF?\r\n++read")
         p.send("ALLF?\r\n")
         
     else:
         pass
-        p.send("++mode 0")
-        p.send("++addr 0")
-        p.send("++mode 1")
-        p.send("++mode")
-        p.send("++eot_enable 1")
-        p.send("++eot_char 10")
-        p.send("++auto 0")
-        #p.send("++eoi  1")
-        #p.send("++eos  1")
         #p.send("++addr 12")
         p.send("ALLF?\r\n++auto 1")
         p.send("++auto 0")
