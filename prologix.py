@@ -11,8 +11,9 @@ dbg_lvl = {
     }
     
 
-logging.basicConfig(level=logging.DEBUG)
-SERIAL_TIMEOUT=0.5
+logging.basicConfig(level=logging.CRITICAL)
+TIMEOUT=1.  # going below might cause probleme when sending a lot of queries quickly
+
 
 help_usage = """
 Prologix commands are:
@@ -69,16 +70,36 @@ class dummy_device():
         print("should return something but in debug mode nothing")
 
 
+#===========================================================================================================
+class serial_device():
+    def __init__(self,dev="usb",
+                 serial_number=None,
+                 
+                 baudrate=9600,
+                 timeout=TIMEOUT,
+
+import serial
+            if serial_number:
+                port = self.find_serial_dev(serial_number)
+                if port == None:
+                    raise Exception("No port found for serial_number %s !!\nABORTING " % serial_number)
+                logging.debug("Debug serial device serial_number %s (port %s)" % (serial_number,port))
+                logging.debug("                    baudrate %s type(%s) " % (baudrate,type(baudrate)))
+                logging.debug("                    timeout %s type(%s)" % (timeout,type(timeout)))
+                logging.debug("                    gpib_eot %s" % (repr(self.gpib_eot)))
+
+                device = serial.Serial(port,baudrate=baudrate,timeout=timeout)
+                self.__write = device.write
+                self.__read = device.read
+            else:
+                raise Exception("Serial number not given")
+
+
 # the class to talk to the prologix
 #===========================================================================================================
 class Prologix_Device():
 #-----------------------------------------------------------------------------------------------------------
     def __init__(self,
-                 dev="usb",
-                 serial_number=None,
-                 ip=None,
-                 baudrate=9600,
-                 timeout=SERIAL_TIMEOUT,
                  gpib_eot="\r\n",
                  debug_level="critical"):
 
@@ -87,30 +108,25 @@ class Prologix_Device():
         else:
             raise Exception("debug level %s not understood should be one of" % ( debug_level,
                                                                                  ", ".join(dbg_lvl.keys())))
-        
+        self.serial_info = None
         self.gpib_eot = to_bytes(gpib_eot)
         
         if dev.lower() == "dummy":
-            self.device = dummy_device()
-            
+            device = dummy_device()
+            self.__write = device.write
+            self.__read  = device.read
         elif dev.lower() == "usb":
-            import serial
-            if serial_number:
-                port = self.find_dev(serial_number)
-                if port == None:
-                    raise Exception("No port found for serial_number %s !!\nABORTING " % serial_number)
-                logging.debug("Debug serial device serial_number %s (port %s)" % (serial_number,port))
-                logging.debug("                    baudrate %s type(%s) " % (baudrate,type(baudrate)))
-                logging.debug("                    timeout %s type(%s)" % (timeout,type(timeout)))
-                logging.debug("                    gpib_eot %s" % (repr(self.gpib_eot)))
-
-                self.device = serial.Serial(port,baudrate=baudrate,timeout=timeout)
-            else:
-                raise Exception("Serial number not given")
+        elif dev.lower() == "tcp":
+            import socket 
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
+            sock.connect((ip, 1234))
+            sock.settimeout(timeout)
+            self.__write = sock.sendall
+            self.__read = sock.recv
         else:
             raise Exception("type %s not implemented yet" % type)
 #-----------------------------------------------------------------------------------------------------------
-    def find_dev(self,sn):
+    def find_serial_dev(self,sn):
         """
         return the path in /dev for the serial number sn or None if not found
         """
@@ -139,10 +155,18 @@ class Prologix_Device():
         from serial.tools import list_ports
         for p in list_ports.comports():
             if p.serial_number==sn:
+                self.serial_info = p.__dict__
                 return p.device
         return None
+   
 #-----------------------------------------------------------------------------------------------------------
-    def find_dev_obsolote(self,sn):
+    def print_serial_info(self):
+        if self.serial_info:
+            for k,v in self.serial_info.items(): 
+                print("%-20s : %s" % (k,v) ) 
+#-----------------------------------------------------------------------------------------------------------
+
+    def find_serial_dev_from_path(self,sn):
         """
         very rough method to get the /dev/ attached to a serial_number
         """
@@ -169,6 +193,8 @@ class Prologix_Device():
     def scan_gpib_addresses(self):
         for a in range(31):
             r = self.query("++spoll %d" % a).decode()
+            print(".",end='')
+            print(a,r)
             if r:
                 print("found something at gpib_address %d" % a)            
 #-----------------------------------------------------------------------------------------------------------
@@ -189,17 +215,17 @@ class Prologix_Device():
 
 
         logging.info("Sending Data %s",repr(full_command))
-        self.device.write(full_command)
+        self.__write(full_command)
 #-----------------------------------------------------------------------------------------------------------
-    def read(self):
+    def read(self,n_bytes=256):
         logging.info("Reading Data")
         self.send(b"++read")
-        return self.device.read(1000)
+        return self.__read(n_bytes)
 #-----------------------------------------------------------------------------------------------------------
     def query(self,msg):
         self.send(msg)
         logging.info("Reading Raw Data")
-        ret_val = self.device.read(1000)
+        ret_val = self.read()
         logging.info("==> %s " % repr(ret_val))
         return ret_val
 #-----------------------------------------------------------------------------------------------------------
@@ -258,7 +284,7 @@ if __name__=="__main__":
     parser.add_argument("-b","--baudrate", help="baudrate (only for serial)",default=9600)
     parser.add_argument("-i", "--ip",help="IP address of the device (only for tcp)",default=None)
     
-    parser.add_argument("-t","--timeout", help="timeout",default=SERIAL_TIMEOUT)
+    parser.add_argument("-t","--timeout", help="timeout",default=TIMEOUT)
     debug_choices=["critical","error","warning","info","debug"]
     parser.add_argument("-d","--debug_level", help="set debug level",choices=debug_choices,default="critical")
 
@@ -281,14 +307,30 @@ if __name__=="__main__":
                             baudrate=int(args.baudrate),
                             timeout=float(args.timeout),
                             debug_level=args.debug_level)
+        p.config()
+        print("serial parameters")
+        p.print_serial_info()
+        print("Scanning gpib adresses ..")
+        p.scan_gpib_addresses()
+        print("... Done")
+        
+        p.scan_gpib_addresses()
+
+
+    elif args.device == "tcp":
+        if args.ip == None:
+            print("usb need a serial_number!!")
+            parser.print_help(sys.stderr)
+            sys.exit(0)
+        p = Prologix_Device(dev="tcp",
+                            ip=args.ip,
+                            timeout=float(args.timeout),
+                            debug_level=args.debug_level)
+        p.config()
     else:
         print("type %s not implemented yet" % args.device)
         sys.exit(0)
 
-    p.config()
-    print("Scanning gpib adresses ..")
-    p.scan_gpib_addresses()
-    print("... Done")
                    
     interact_usage="""
 You can now send, query and read command from the prologix\n\tNote that each command should be preceded by a letter indicating the  type of command
@@ -323,61 +365,5 @@ to Quit the program type Q
             
     print("Bye !!")
     
-    #default_sn="PXG9ASAT"
-    #running=True
-    #p = Prologix_Device(serial_number=default_sn)
-
-    #try_good=False
-    comment="""if try_good:
-        pass
-        p.send("++addr 12")
-        p.send("ALLF?\r\n++read")
-        p.send("ALLF?\r\n")
-        
-    else:
-        pass
-        #p.send("++addr 12")
-        p.send("ALLF?\r\n++auto 1")
-        p.send("++auto 0")
-"""
-    #p.send("++addr")
-    #p.send("++auto")
-    #p.send("++eoi")
-    #p.send("++rst")
-    #p.send("++ver")
-    #p.send("++eos")
-    #p.send("++eot_enable")
-    #p.send("++eot_char")
-    #p.send("++mode")
-    #p.send("++status")
-    #p.send("++ver")
-
-    
-    #p.send("++help")
-    
-    
-    #p.send("*idn?\r\n")
-    #p.read()
-    #p.send("ALLF?\r\n")
-    #p.read()
-    #p.send("ALLF?\r\n++read")
-    #print("yup")
-    #p.send("ALLF?\r\n++auto 1")
-
-
-        
-
-
-    running = False
-    while running:
-        cmd= raw_input("type a command ")
-        if cmd=="q":
-            running=False
-        else:
-            c = p.check_command(cmd)
-            if c:
-                p.send(cmd)
-            else:
-                print(c)
         
 
