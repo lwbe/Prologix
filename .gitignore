@@ -1,3 +1,7 @@
 *pyc
 *~
+build/
+dist/
+prologix.egg-info/
+
 
